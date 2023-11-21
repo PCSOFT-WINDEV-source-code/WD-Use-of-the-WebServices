@@ -1,0 +1,268 @@
+#To edit and compare internal_properties, use WINDEV integrated tools.
+#Internal properties refer to the properties of controls in windows, reports, etc.
+info :
+ name : GlobalProcedures
+ major_version : 28
+ minor_version : 0
+ type : 7
+ description : ""
+ subtype : 0
+procedure_set :
+ identifier : 0x1334189c00bb0e8a
+ internal_properties : CAAAAAgAAABGLu41kG7fjQV3iS4F72qmnKaNh5694reolNKIW0iw
+ code_elements :
+  internal_properties : CAAAAAgAAAC+1a8tRBTeuNxy9czmgHVVX8KcI1n+IgmkpY1AWCsSabe6VYQcA8vErKOeL63elq+2c9ljfE3RANEKluI3f6IZ9viuevWGt5rIq6emTjqBog==
+  type_code : 31
+  p_codes :
+   -
+     code : |1-
+      clPlot is CTraceServer
+     type : 720896
+  procedures :
+   -
+     name : sSearch
+     procedure_id : 1383758043815874186
+     type_code : 15
+     code : |1-
+      PROCEDURE sSearch(arrKeywords is array of string) :array of int
+      
+      // Array of results
+      arrResultArray is array of int
+      
+      // For all the keywords, perform an Open search
+      sKeyword is string
+      FOR EACH sKeyword of arrKeywords
+      	clPlot:Information("New keyword: "+sKeyword)
+      	
+      	// Start the search
+      	clPlot:Information("Running the query")
+      	HExecuteQuery(Image_Query,hQueryDefault,sKeyword)
+      	IF ErrorOccurred THEN
+      		clPlot:Information("Error on the query: "+HErrorInfo())
+      		RESULT arrResultArray
+      	END
+      	clPlot:Information("Query run")
+      	
+      	// Browse the result of the search
+      	FOR EACH Image_Query 
+      		// Check whether this image is already found
+      		IF ArraySeek(arrResultArray,asLinear,Image_Query.ImageID) = -1 THEN
+      			// Add this image to the result of the search			
+      			ArrayAddLine(arrResultArray,Image_Query.ImageID)
+      			
+      			clPlot:Information("Image added: "+Image_Query.ImageID)
+      		END
+      	END
+      	
+      END
+      
+      clPlot:Information("End of browse for the result of he search")
+      
+      
+      // Return the list of keywords
+      RESULT arrResultArray
+     type : 458752
+   -
+     name : ImageSearch
+     procedure_id : 1383758043815939722
+     type_code : 15
+     code : |1+
+      Procedure ImageSearch(sKeywords is a string,bSearchOR is a boolean)
+      
+      arrKeywords is array of strings
+      
+      clPlot:Information("bSearchOR = "+bSearchOR )
+      
+      FOR EACH string sWord of sKeywords separee by "$"
+      	ArrayAdd(arrKeywords,sWord)
+      END
+      
+      // Search for the images corresponding to the keywords
+      arrResult is array of int
+      IF StringCompare(bSearchOR,"true",ccIgnoreCase+ccIgnorePonctuationAndSpace) = 0 _OR_ bSearchOR = 1 _OR_ bSearchOR = "1" THEN
+      	arrResult = sSearch(arrKeywords)
+      ELSE
+      	arrResult = SearchANDOR(arrKeywords)
+      END
+      
+      // Return the list of images to find
+      RESULT arrResult
+     type : 458752
+   -
+     name : ReturnImage
+     procedure_id : 1383758043816005258
+     type_code : 15
+     code : |1-
+      Procedure PUBLIC ReturnImage(nImageNum is an int):string
+      
+      // Local variables
+      sContent is string
+      
+      // Search for the image
+      clPlot:Information("Search for the image")
+      HReadSeekFirst(Image,ImageID,nImageNum)
+      IF HFound(Image) THEN
+      	clPlot:Information("Image found: " +gsImageDir + ["/"] + Image.Path)
+      	IF fFileExist(gsImageDir + ["/"] + Image.Path) = True THEN
+      		sContent = fLoadText(gsImageDir + ["/"] + Image.Path) 
+      		clPlot:Information("Content Size: "+Length(sContent)+" "+"Content: "+sContent)
+      	ELSE
+      		clPlot:Information("Unable to load the content of the image:" + gsImageDir + ["/"] + Image.Path)
+      	END
+      	
+      	// Encode the file
+      	RESULT Crypt(sContent,"",cryptNone,encodeBASE64)
+      	
+      ELSE
+      	// Return an empty string
+      	RESULT ""
+      END
+     type : 458752
+   -
+     name : arrReturnKeywords
+     procedure_id : 1383758043816070794
+     type_code : 15
+     code : |1-
+      Procedure arrReturnKeywords()
+      
+      // Local variables
+      arrKeywords is array of string
+      
+      // Return the content of the keyword file
+      HReadFirst(Keyword)
+      WHILE NOT HOut(Keyword)
+      	ArrayAdd(arrKeywords,Keyword.Word)
+      	HReadNext(Keyword)
+      END
+      
+      // Return the list of keywords
+      RESULT arrKeywords
+     type : 458752
+   -
+     name : SearchANDOR
+     procedure_id : 1383758043816136330
+     type_code : 15
+     code : |1-
+      PROCEDURE SearchANDOR(arrKeywords is array of string):array of int
+      
+      // Local variables
+      sKeyword is string
+      arrResults is array of int
+      bFound is boolean
+      
+      // Open the database 
+      IF ErrorOccurred THEN
+      	RESULT arrResults
+      END
+      
+      // For each image, check whether the keywords correspond
+      FOR EACH Image on ImageID
+      	// Search for the keywords in the relation file: 
+      	// if a key_word is missing, we don't retain the image
+      	bFound = True
+      	
+      	FOR EACH sKeyword of arrKeywords
+      		// Searches in the relation file: 		
+      		HReadSeekFirst(KeyWord_Image,Image_KeywordID,HBuildKeyValue(KeyWord_Image,Image_KeywordID,Image.ImageID,sKeyword))
+      		IF HFound(KeyWord_Image)=False THEN
+      			bFound = False	
+      		END
+      	END
+      	
+      	// If the keyword is found, add it to the result
+      	IF bFound = True THEN
+      		ArrayAdd(arrResults,Image.ImageID)
+      	END
+      END
+      
+      RESULT arrResults
+     type : 458752
+   -
+     name : Initialize
+     procedure_id : 1383758043816201866
+     type_code : 15
+     code : |1-
+      Procedure Initialize()
+      
+      clPlot.DefineFile(gsCurrentDir + ["/"] + "WebserviceServer.log")
+     type : 458752
+  procedure_templates : []
+  property_templates : []
+ code_parameters :
+  internal_properties : CAAAAAgAAACVGQgYbalU7DKC3oH4ItDrjtcTHXXV/EuH8q0IbhyQlw==
+  original_name : ProceduresGlobales
+resources :
+ string_res :
+  identifier : 0x3c04b3b56ca157ed
+  internal_properties : CAAAAAgAAACm76HWfKGWp33VjXInA4cRlqArlgTTA862QGt72W2ld5Y=
+  strings :
+   -
+     text :
+      en-GB : The <%1> directory does not exist.
+     index : 2
+   -
+     text :
+      en-GB : The data files are not found in the <%1> directory.
+     index : 3
+   -
+     text :
+      en-GB : "Keyword number: "
+     index : 4
+   -
+     text :
+      en-GB : Running the query
+     index : 5
+   -
+     text :
+      en-GB : "Error on the request: "
+     index : 6
+   -
+     text :
+      en-GB : Request run
+     index : 7
+   -
+     text :
+      en-GB : Start browsing the result of the search
+     index : 8
+   -
+     text :
+      en-GB : "Added image: "
+     index : 9
+   -
+     text :
+      en-GB : Continue to browse the result of the search
+     index : 10
+   -
+     text :
+      en-GB : End of browse for the result of he search
+     index : 11
+   -
+     text :
+      en-GB : "Result String: "
+     index : 12
+   -
+     text :
+      en-GB : Search for the image
+     index : 13
+   -
+     text :
+      en-GB : "Image found: "
+     index : 14
+   -
+     text :
+      en-GB : "Image: "
+     index : 15
+   -
+     text :
+      en-GB : "size: "
+     index : 16
+   -
+     text :
+      en-GB : "Content size: "
+     index : 17
+   -
+     text :
+      en-GB : "Content: "
+     index : 18
+custom_note :
+ internal_properties : CAAAAAgAAABtB9HWVzrXO2+4NDRVK0vmzaNKrCKqH1DBX30lMmGZ
